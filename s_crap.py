@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 from seleniumbase import SB
-from selenium.common.exceptions import WebDriverException
 import argparse
 import logging
+import signal
+import sys
 
 url = 'https://checko.ru/search/advanced'  # ?page={1,500}
 
@@ -11,7 +12,7 @@ def parse_company_urls(page):
     cur_url = url + '?page=' + str(page)
     urls = []
     try:
-        with SB(uc=True) as sb:
+        with SB(uc=True, headless=True) as sb:
             sb.activate_cdp_mode(cur_url)
             logging.info("Начинаем поиск url в %s" % cur_url)
 
@@ -24,7 +25,7 @@ def parse_company_urls(page):
                         urls.append(link_href)
             else:
                 logging.warning("Ссылки на найдены")
-    except WebDriverException as err:
+    except Exception as err:
         logging.error("Вызвано исключение:", exc_info=True)
     logging.info("Поиск url в %s окончен" % cur_url)
     return urls
@@ -35,7 +36,7 @@ def parse_company_urls(page):
 def parse_company_data(comp_url):
     comp_str = ''
     try:
-        with SB(uc=True) as sb:
+        with SB(uc=True, headless=True) as sb:
             sb.activate_cdp_mode(comp_url)
             logging.info("Начинаем парсить %s" % comp_url)
 
@@ -69,7 +70,7 @@ def parse_company_data(comp_url):
                 comp_str += add_okveds[:-1] + ';'
             if add_descrs:
                 comp_str += add_descrs[:-1]
-    except WebDriverException as err:
+    except Exception as err:
         logging.error("Вызвано исключение:", exc_info=True)
     if not comp_str:
         logging.warning("Не получилось спарсить данные с %s" % comp_url)
@@ -111,13 +112,18 @@ def set_up_logging(file, log_level):
                         format='%(asctime)s %(levelname)s %(message)s')
 
 
+def sigint_hdl(signo, frame):
+    sys.exit(1)
+
+
 def main():
     parser = set_up_argparser()
     args = parser.parse_args()
     set_up_logging(args.file, args.log_level)
-    f = open('data.csv', 'w')
+    f = open('../Downloads/data.csv', 'a', buffering=1)
     n = 0
     for page in range(1, 501):
+    # for page in range(474, 439, -1):  # 60 pages, 60*25=1500 companies ~ 3h
         urls = parse_company_urls(page)
         for comp_url in urls:
             comp_str = parse_company_data(comp_url)
@@ -131,4 +137,5 @@ def main():
 
 
 if __name__ == '__main__':
+    signal.signal(signal.SIGINT, sigint_hdl)
     main()
